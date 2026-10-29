@@ -81,8 +81,8 @@ pipeline {
     stage('Docker build') {
       steps {
         sh '''
-          docker build -t ${BACKEND_IMAGE}:${GIT_SHA}  backend
-          docker build -t ${FRONTEND_IMAGE}:${GIT_SHA} frontend
+          docker build --pull -t ${BACKEND_IMAGE}:${GIT_SHA}  backend
+          docker build --pull -t ${FRONTEND_IMAGE}:${GIT_SHA} frontend
         '''
       }
     }
