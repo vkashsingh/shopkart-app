@@ -104,3 +104,7 @@ npm run lint
 npm run build
 ```
 
+
+## Documentation
+
+- [Architecture and CI pipeline](docs/architecture.md)
