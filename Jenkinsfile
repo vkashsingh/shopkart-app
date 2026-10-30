@@ -20,6 +20,7 @@ pipeline {
   environment {
     // Credential IDs: the secrets live in Jenkins, never in Git
     DOCKERHUB_CREDS = 'dockerhub'
+    GITHUB_CREDS    = 'github-token'
     // Image names
     REGISTRY_USER   = 'vkashs'
     BACKEND_IMAGE   = "${REGISTRY_USER}/shopkart-backend"
@@ -111,6 +112,27 @@ pipeline {
             docker push ${BACKEND_IMAGE}:${GIT_SHA}
             docker push ${FRONTEND_IMAGE}:${GIT_SHA}
             docker logout
+          '''
+        }
+      }
+    }
+    stage('Update GitOps repo') {
+      steps {
+        // Commit the new image tag to shopkart-gitops; Argo CD then rolls it out to EKS.
+        // Jenkins never runs kubectl: Git is the only way to change the cluster.
+        withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDS,
+                         usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+          sh '''
+            rm -rf gitops
+            git clone --depth 1 "https://${GH_USER}:${GH_TOKEN}@github.com/vkashsingh/shopkart-gitops.git" gitops
+            cd gitops
+            sed -i "s#image: ${BACKEND_IMAGE}:.*#image: ${BACKEND_IMAGE}:${GIT_SHA}#"  manifests/backend-deployment.yaml
+            sed -i "s#image: ${FRONTEND_IMAGE}:.*#image: ${FRONTEND_IMAGE}:${GIT_SHA}#" manifests/frontend-deployment.yaml
+            if git diff --quiet; then echo "Images already at ${GIT_SHA}, nothing to commit"; exit 0; fi
+            git config user.name  "jenkins-ci"
+            git config user.email "jenkins-ci@shopkart.local"
+            git commit -am "ci: update images to ${GIT_SHA}"
+            git push origin HEAD:main
           '''
         }
       }

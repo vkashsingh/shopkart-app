@@ -138,6 +138,7 @@ function App() {
     <div className="container">
       <header>
         <h1>ShopKart</h1>
+        <p className="tagline">Deployed by Jenkins + Argo CD</p>
         <p>Product Catalogue &amp; Inventory Management</p>
       </header>
 
