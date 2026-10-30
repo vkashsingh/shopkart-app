@@ -1,9 +1,14 @@
+# Local multi-container Docker Compose environment for ShopKart.
+# Coordinates MongoDB, the Express backend, and the Nginx-hosted React frontend with health checks.
+
 services:
+  # Database service: MongoDB 8.0 document store for product catalogue data
   mongo:
     image: mongo:8.0
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
+    # Healthcheck verifies MongoDB is ready to accept commands using mongosh ping
     healthcheck:
       test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')" ]
       interval: 10s
@@ -11,6 +16,7 @@ services:
       retries: 5
       start_period: 5s
 
+  # Backend service: Node.js 24 / Express REST API server
   shop-backend:
     build:
       context: ./backend
@@ -19,9 +25,11 @@ services:
     environment:
       - PORT=8080
       - MONGO_URL=mongodb://mongo:27017/shopkart
+    # Startup dependency: waits for MongoDB container to pass its health check
     depends_on:
       mongo:
         condition: service_healthy
+    # Healthcheck verifies Express HTTP server responsiveness via internal /health endpoint
     healthcheck:
       test: [ "CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" ]
       interval: 10s
@@ -29,6 +37,7 @@ services:
       retries: 5
       start_period: 5s
 
+  # Frontend service: React SPA served by unprivileged Nginx on port 8080 (mapped to host 3000)
   shop-frontend:
     build:
       context: ./frontend
@@ -36,14 +45,17 @@ services:
     restart: unless-stopped
     ports:
       - "3000:8080"
+    # Startup dependency: waits for backend API container to be healthy before accepting traffic
     depends_on:
       shop-backend:
         condition: service_healthy
+    # Healthcheck verifies Nginx server status via /nginx-health endpoint
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:8080/nginx-health" ]
       interval: 10s
       timeout: 3s
       retries: 3
+
+# Named volume: persists MongoDB database files across container lifecycles
 volumes:
   mongo-data:
-
