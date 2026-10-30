@@ -1,90 +1,122 @@
 # ShopKart
 
-## ShopKart project map
+ShopKart is a 3-tier product catalogue application featuring a React and Vite frontend served by a non-root Nginx container, a Node.js and Express backend REST API, and a MongoDB database. The codebase is tested, quality-gated, and security-scanned by Jenkins, with container images pushed to Docker Hub and automatically deployed to an Amazon EKS cluster via Argo CD GitOps synchronization.
 
-| Repo | What it holds | Changed by |
-|---|---|---|
-| [shopkart-app](https://github.com/vkashsingh/shopkart-app) | App code (React, Node.js), Dockerfiles, docker compose, Jenkinsfile | Developers |
-| [shopkart-infra](https://github.com/vkashsingh/shopkart-infra) | Terraform: Jenkins master EC2, EKS cluster | DevOps |
-| [shopkart-gitops](https://github.com/vkashsingh/shopkart-gitops) | Kubernetes YAML + Argo CD Application (what runs in EKS) | Jenkins (image tag), Argo CD (sync) |
+---
 
-**Flow:** push to shopkart-app → Jenkins (tests, SonarQube, OWASP, Trivy, build, push to Docker Hub) → Jenkins updates the image tag in shopkart-gitops → Argo CD syncs to EKS → Prometheus/Grafana monitor.
+## ShopKart Project Map
 
-**You are here: shopkart-app**
+The ShopKart DevOps platform is split across three Git repositories:
 
-ShopKart is a lightweight product catalogue application with a React single-page frontend and a Node.js/Express REST backend backed by MongoDB. It provides full CRUD operations for product inventory along with Prometheus metrics, structured JSON logging, and containerized deployment.
+| Repository | What it holds | Location |
+| :--- | :--- | :--- |
+| **[shopkart-app](https://github.com/vkashsingh/shopkart-app)** | Application source code, Dockerfiles, local Docker Compose setup, Jenkinsfile CI pipeline, and architecture documentation. | **You are here: shopkart-app** |
+| **[shopkart-infra](https://github.com/vkashsingh/shopkart-infra)** | Terraform code for AWS infrastructure (Jenkins CI/CD master EC2 instance and Amazon EKS cluster). | [shopkart-infra](https://github.com/vkashsingh/shopkart-infra) |
+| **[shopkart-gitops](https://github.com/vkashsingh/shopkart-gitops)** | Kubernetes deployment manifests and Argo CD Application definitions. | [shopkart-gitops](https://github.com/vkashsingh/shopkart-gitops) |
+
+---
 
 ## Architecture
 
-```text
-browser -> nginx :8080 -> backend :8080 -> mongo :27017
+The runtime traffic flow between components:
+
+```mermaid
+flowchart LR
+    Browser["User Browser"] -->|"HTTP :3000 -> :8080"| Frontend["Nginx Frontend<br/>(React SPA on :8080)"]
+    Frontend -->|"Proxy /api/ -> :8080"| Backend["Node.js Backend<br/>(Express API on :8080)"]
+    Backend -->|"Mongoose -> :27017"| Mongo[("MongoDB :27017")]
 ```
 
-- **Frontend (`shop-frontend`)**: React 19 + Vite SPA served via `nginx-unprivileged:1.27-alpine` running as a non-root user on container port `8080` (mapped to host port `3000`).
-  - Serves static assets with gzip compression and SPA fallback (`try_files $uri /index.html`).
-  - Proxies `/api/` requests directly to `http://shop-backend:8080`.
-  - Exposes `/nginx-health` for HTTP health checks.
-- **Backend (`shop-backend`)**: Node.js 24 + Express 5 running on container port `8080` as non-root user `node`.
-  - REST API at `/api/products` (CRUD operations).
-  - Liveness check at `/health` (HTTP 200).
-  - Readiness check at `/ready` (verifies MongoDB connection).
-  - Prometheus metrics at `/metrics` (request counts and duration histograms).
-  - Structured JSON logs to stdout per request.
-- **Database (`mongo`)**: MongoDB 8.0 running on container port `27017` with persistent data stored in named volume `mongo-data`.
+- **Frontend:** React 19 single-page application built with Vite and served by `nginx-unprivileged:1.30-alpine` (UID 101) on port 8080.
+- **Backend:** Node.js 24 and Express 5 application running as non-root user `node` on port 8080.
+- **Database:** MongoDB 8.0 storing product catalogue collections.
 
-## Ports
+---
 
-| Service | Container Port | Host Port | Description |
+## Repository Structure
+
+```text
+.
+├── Jenkinsfile                  # Jenkins declarative CI pipeline definition
+├── README.md                    # Project overview and runbook
+├── docker-compose.yml           # Local multi-container development environment
+├── backend/                     # Backend API service
+│   ├── .dockerignore            # Docker build ignore rules
+│   ├── .env.example             # Template for local environment variables
+│   ├── Dockerfile               # Multi-stage Dockerfile (node:24-alpine, user node)
+│   ├── eslint.config.js         # ESLint flat config
+│   ├── package.json             # Node dependencies and test scripts
+│   ├── package-lock.json        # Pinned dependency lockfile
+│   ├── sonar-project.properties # SonarQube scanner properties
+│   ├── src/                     # Backend source files
+│   │   ├── app.js               # Express application and route registrations
+│   │   ├── metrics.js           # Prometheus metrics and HTTP logging middleware
+│   │   ├── models/product.js    # Mongoose Product model schema
+│   │   ├── routes/products.js   # Product CRUD endpoints
+│   │   └── server.js            # HTTP listener, Mongo connection, graceful shutdown
+│   └── tests/products.test.js   # Offline Jest tests with mocked Mongoose model
+├── frontend/                    # Frontend React SPA
+│   ├── .dockerignore            # Docker build ignore rules
+│   ├── Dockerfile               # Multi-stage Dockerfile (Vite build -> unprivileged Nginx)
+│   ├── eslint.config.js         # ESLint flat config
+│   ├── index.html               # SPA entrypoint HTML
+│   ├── nginx.conf               # Nginx reverse proxy and SPA fallback routing
+│   ├── package.json             # React dependencies and scripts
+│   ├── package-lock.json        # Pinned dependency lockfile
+│   ├── sonar-project.properties # SonarQube scanner properties
+│   ├── src/                     # Frontend source files
+│   │   ├── App.jsx              # Product catalogue view and management forms
+│   │   ├── App.test.jsx         # Vitest and React Testing Library tests
+│   │   ├── index.css            # Stylesheet (plain CSS)
+│   │   ├── main.jsx             # React entrypoint
+│   │   └── setupTests.js        # Test environment setup
+│   └── vite.config.js           # Vite dev server and proxy configuration
+└── docs/                        # Architecture documentation
+    └── architecture.md          # End-to-end architecture and pipeline guide
+```
+
+---
+
+## Run Locally
+
+Start all three services using Docker Compose:
+
+```bash
+docker compose up -d --build
+```
+
+Access the application in your browser at: **[http://localhost:3000](http://localhost:3000)**.
+
+### Ports Table
+
+| Service | Container Port | Host Port | Purpose |
 | :--- | :--- | :--- | :--- |
-| `shop-frontend` | `8080` | `3000` | Nginx web server & reverse proxy (public entrypoint) |
-| `shop-backend` | `8080` | None (internal) | Express REST API server |
-| `mongo` | `27017` | None (internal) | MongoDB database |
+| `shop-frontend` | `8080` | `3000` | Nginx reverse proxy and static asset server. |
+| `shop-backend` | `8080` | None (Internal) | Express REST API server. |
+| `mongo` | `27017` | None (Internal) | MongoDB database. |
 
-## Environment Variables
+### Environment Variables
 
-### Backend (`backend/.env.example`)
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `PORT` | `8080` | Port on which the Express server listens |
-| `MONGO_URL` | `mongodb://mongo:27017/shopkart` | MongoDB connection URL |
-| `NODE_ENV` | `production` | Node.js runtime environment |
+| Variable | Default | Service | Description |
+| :--- | :--- | :--- | :--- |
+| `PORT` | `8080` | `shop-backend` | Port on which Express listens. |
+| `MONGO_URL` | `mongodb://mongo:27017/shopkart` | `shop-backend` | MongoDB connection URL. |
 
-### Frontend
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `API_TARGET` | `http://localhost:8080` | Target URL used by the Vite dev server proxy |
+To stop the containers:
 
-## How to Run with Docker Compose
+```bash
+docker compose down
+```
 
-1. **Build and start all services in the background**:
-   ```bash
-   docker compose up -d --build
-   ```
+---
 
-2. **Check the status and health of the running containers**:
-   ```bash
-   docker compose ps
-   ```
+## Tests
 
-3. **Access the application**:
-   - Web Application: [http://localhost:3000](http://localhost:3000)
-   - API Health: [http://localhost:3000/api/products](http://localhost:3000/api/products)
-   - Nginx Health: [http://localhost:3000/nginx-health](http://localhost:3000/nginx-health)
-
-4. **View logs**:
-   ```bash
-   docker compose logs -f
-   ```
-
-5. **Stop and remove containers and volumes**:
-   ```bash
-   docker compose down -v
-   ```
-
-## How to Run Tests
+Both backend and frontend test suites run offline without requiring external network access or running databases.
 
 ### Backend Tests
-The backend test suite mocks the Mongoose model and runs offline without requiring a database instance. It produces a coverage report in `backend/coverage/lcov.info`.
+
+Runs Jest test suites with mocked Mongoose models and outputs coverage to `backend/coverage/lcov.info`:
 
 ```bash
 cd backend
@@ -94,17 +126,83 @@ npm run lint
 ```
 
 ### Frontend Tests
-The frontend test suite uses Vitest and React Testing Library with mocked `fetch` calls. It produces a coverage report in `frontend/coverage/lcov.info`.
+
+Runs Vitest and React Testing Library tests with mocked `fetch` calls and outputs coverage to `frontend/coverage/lcov.info`:
 
 ```bash
 cd frontend
 npm install
 npm test
 npm run lint
-npm run build
 ```
 
+---
 
-## Documentation
+## API and Health Endpoints
 
-- [Architecture and CI pipeline](docs/architecture.md)
+| Endpoint | Method | Response | Used By | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| `/api/products` | `GET`, `POST` | `200`, `201`, `400` | Frontend UI | Retrieve product list or create a product. |
+| `/api/products/:id` | `GET`, `PUT`, `DELETE` | `200`, `204`, `400`, `404` | Frontend UI | Fetch, update, or remove a product by ID. |
+| `/health` | `GET` | `200 {"status":"ok"}` | Docker healthcheck / K8s liveness probe | Liveness verification (no DB check). |
+| `/ready` | `GET` | `200` or `503` | K8s readiness probe | Readiness check (verifies Mongo connection state). |
+| `/metrics` | `GET` | `200` (Prometheus text) | Prometheus scraper | Exposes Node metrics, request counts, and durations. |
+| `/nginx-health` | `GET` | `200 "healthy\n"` | Docker healthcheck / Frontend probe | Nginx server availability check. |
+
+---
+
+## CI Pipeline
+
+The continuous integration pipeline is defined in [Jenkinsfile](Jenkinsfile).
+
+### Pipeline Flowchart
+
+```mermaid
+flowchart TB
+    A["1. Checkout"] --> B["2. Test (Parallel: Backend & Frontend)"]
+    B --> C["3. SonarQube: backend"]
+    C --> D["4. SonarQube: frontend"]
+    D --> E["5. Trivy: source scan"]
+    E --> F["6. Docker build"]
+    F --> G["7. Trivy: image scan"]
+    G --> H["8. Push to Docker Hub"]
+    H --> I["9. Update GitOps repo"]
+```
+
+### Pipeline Details
+
+- **Trigger:** Configured with `pollSCM('H/2 * * * *')` to poll Git every 2 minutes.
+- **Image Tagging:** Uses the 7-character Git SHA (`git rev-parse --short=7 HEAD`) as the immutable tag for both images.
+- **Container Images:** `vkashs/shopkart-backend` and `vkashs/shopkart-frontend`.
+- **Jenkins Credentials:**
+  - `dockerhub`: Docker Hub username and access token for container registry authentication.
+  - `github-token`: GitHub personal access token used to clone and update the GitOps repository.
+
+### Stages Summary
+
+| Stage | What it does |
+| :--- | :--- |
+| **Checkout** | Clones the commit and extracts the 7-character Git SHA (`GIT_SHA`). |
+| **Test** | Runs backend and frontend unit tests in parallel with `npm ci && npm test`. |
+| **SonarQube: backend** | Runs `sonar-scanner` against backend code and blocks on the Quality Gate result. |
+| **SonarQube: frontend** | Runs `sonar-scanner` against frontend code and blocks on the Quality Gate result. |
+| **Trivy: source scan** | Runs `trivy fs` on repository files, failing on CRITICAL vulnerabilities or secret leaks. |
+| **Docker build** | Builds both container images using `docker build --pull` tagged with `${GIT_SHA}`. |
+| **Trivy: image scan** | Runs `trivy image` against both built images, failing on fixable CRITICAL CVEs. |
+| **Push to Docker Hub** | Logs in with `DOCKERHUB_CREDS` and pushes backend and frontend images to Docker Hub. |
+| **Update GitOps repo** | Clones `shopkart-gitops` with `GITHUB_CREDS`, updates deployment YAMLs with the new tag, and commits. |
+
+---
+
+## How Deployment Happens
+
+1. The Jenkins CI pipeline builds and validates the artifacts, tags them with the 7-character Git commit SHA, and pushes images to Docker Hub.
+2. In the final stage, Jenkins clones [shopkart-gitops](https://github.com/vkashsingh/shopkart-gitops), updates `manifests/backend-deployment.yaml` and `manifests/frontend-deployment.yaml` with the new image tag, and pushes the change to GitHub.
+3. Argo CD monitors the `shopkart-gitops` repository. Upon detecting the Git commit, Argo CD automatically reconciles and syncs the new deployment manifests into the Amazon EKS cluster.
+4. Kubernetes performs zero-downtime rolling updates for frontend and backend pods.
+
+---
+
+## Architecture Documentation
+
+For in-depth explanations of AWS infrastructure, security hardening, Jenkins configurations, and troubleshooting records, see [docs/architecture.md](docs/architecture.md).
