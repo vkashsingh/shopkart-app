@@ -19,7 +19,7 @@ flowchart LR
     Backend -->|"Mongoose -> :27017"| Mongo[("MongoDB :27017")]
 ```
 
-Traffic enters through an unprivileged Nginx web server on port 8080 serving the static React build. Nginx proxies all `/api/` requests to the Express backend on port 8080, which connects to MongoDB on port 27017.
+Traffic enters through an unprivileged Nginx web server on port 8080 serving the static React build. Nginx proxies all `/api/` requests to the Express backend on port 8080, which connects to MongoDB on port 27017. The backend exposes Prometheus metrics at `/metrics`, which Prometheus scrapes in the EKS cluster.
 
 ## CI/CD Flow
 
