@@ -6,7 +6,7 @@ ShopKart is a 3-tier product catalogue application with a React single-page fron
 
 | Repository | Description | Location |
 | :--- | :--- | :--- |
-| [shopkart-app](https://github.com/vkashsingh/shopkart-app) | Application source code, Dockerfiles, Docker Compose, Jenkinsfile, and docs. | You are here: shopkart-app |
+| [shopkart-app](https://github.com/vkashsingh/shopkart-app) | Application source code, Dockerfiles, Docker Compose, Jenkinsfile. | You are here: shopkart-app |
 | [shopkart-infra](https://github.com/vkashsingh/shopkart-infra) | Terraform configuration for the Jenkins master EC2 instance and Amazon EKS. | [shopkart-infra](https://github.com/vkashsingh/shopkart-infra) |
 | [shopkart-gitops](https://github.com/vkashsingh/shopkart-gitops) | Plain Kubernetes YAML manifests and Argo CD Application resources. | [shopkart-gitops](https://github.com/vkashsingh/shopkart-gitops) |
 
@@ -38,32 +38,10 @@ Jenkins runs unit tests, SonarQube quality gates, Trivy security scans, and buil
 
 ```text
 .
-├── Jenkinsfile                  # Declarative CI pipeline (test, scan, build, push, update GitOps)
-├── README.md                    # Project overview and runbook
-├── docker-compose.yml           # Local multi-container development environment
-├── backend/                     # Express REST API service (Node.js 24)
-│   ├── .dockerignore            # Docker build ignore rules
-│   ├── .env.example             # Example environment variables
-│   ├── Dockerfile               # Multi-stage container build (node:24-alpine, user node)
-│   ├── eslint.config.js         # ESLint configuration
-│   ├── package.json             # Backend dependencies and scripts
-│   ├── package-lock.json        # Pinned dependency lockfile
-│   ├── sonar-project.properties # SonarQube scanner configuration
-│   ├── src/                     # Backend API source code
-│   └── tests/                   # Offline Jest API tests
-├── frontend/                    # React single-page frontend application
-│   ├── .dockerignore            # Docker build ignore rules
-│   ├── Dockerfile               # Multi-stage build (Vite build -> unprivileged Nginx)
-│   ├── eslint.config.js         # ESLint configuration
-│   ├── index.html               # SPA entrypoint HTML
-│   ├── nginx.conf               # Nginx reverse proxy and SPA routing
-│   ├── package.json             # Frontend dependencies and scripts
-│   ├── package-lock.json        # Pinned dependency lockfile
-│   ├── sonar-project.properties # SonarQube scanner configuration
-│   ├── src/                     # React application source code
-│   └── vite.config.js           # Vite dev server and test configuration
-└── docs/                        # Architecture documentation
-    └── architecture.md          # End-to-end architecture and pipeline guide
+├── Jenkinsfile        # CI pipeline (test, scan, build, push, update GitOps)
+├── docker-compose.yml # Local multi-container development setup
+├── backend/           # Node.js/Express REST API and Mongoose model
+└── frontend/          # React SPA served by unprivileged Nginx
 ```
 
 ## Run Locally
